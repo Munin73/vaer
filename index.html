@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Vær · Detaljert</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E141B; --panel:#151F2A; --panel2:#1B2734; --line:#243240;
+    --txt:#DCE6F0; --mut:#7E90A3; --dim:#5A6B7D;
+    --temp:#FFB454; --cold:#5AB8FF; --rain:#58A6FF; --wind:#3DDBD9; --uv:#C792EA; --ok:#7FD88F; --warn:#FF7B72;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+    --sans:'Inter',-apple-system,system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html{background:var(--bg)}
+  body{
+    font-family:var(--sans); background:var(--bg); color:var(--txt);
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    min-height:100vh; font-size:14px; line-height:1.4;
+  }
+  header{
+    position:sticky; top:0; z-index:20; background:rgba(14,20,27,.92);
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); padding:10px 14px;
+  }
+  .hrow{display:flex; align-items:center; gap:8px}
+  .loc-name{font-family:var(--mono); font-weight:600; font-size:15px; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .loc-sub{font-size:11px; color:var(--mut); font-family:var(--mono)}
+  .ibtn{
+    background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+    border-radius:8px; padding:7px 10px; font-size:13px; font-family:var(--sans); cursor:pointer;
+  }
+  .ibtn:active{background:var(--line)}
+  #searchbox{display:none; margin-top:8px; gap:6px}
+  #searchbox.open{display:flex}
+  #q{flex:1; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 10px; color:var(--txt); font-size:14px; font-family:var(--sans); outline:none}
+  #q:focus{border-color:var(--rain)}
+  #results{margin-top:6px}
+  .res{padding:9px 10px; border-bottom:1px solid var(--line); cursor:pointer; font-size:13px}
+  .res:active{background:var(--panel2)}
+  .res small{color:var(--mut)}
+  main{padding:12px 12px 30px; max-width:640px; margin:0 auto}
+
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-bottom:12px; overflow:hidden}
+  .ph{display:flex; justify-content:space-between; align-items:baseline; padding:10px 14px 0; }
+  .ph h2{font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--mut)}
+  .ph .meta{font-family:var(--mono); font-size:10px; color:var(--dim)}
+
+  /* Nå-panel */
+  .now{padding:14px}
+  .now-top{display:flex; align-items:center; gap:14px}
+  .now-temp{font-family:var(--mono); font-size:56px; font-weight:500; line-height:1; letter-spacing:-.03em}
+  .now-desc{flex:1}
+  .now-desc .sym{font-size:30px; line-height:1}
+  .now-desc .txt{font-size:14px; font-weight:500; margin-top:2px}
+  .now-desc .feels{font-size:12px; color:var(--mut); font-family:var(--mono)}
+  .grid{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border-top:1px solid var(--line); margin-top:14px}
+  .cell{background:var(--panel); padding:10px 8px 9px; text-align:center}
+  .cell .k{font-size:10px; color:var(--mut); letter-spacing:.06em; text-transform:uppercase}
+  .cell .v{font-family:var(--mono); font-size:15px; font-weight:600; margin-top:2px}
+  .cell .u{font-size:10px; color:var(--dim); font-family:var(--mono)}
+
+  /* Meteogram */
+  .scroller{overflow-x:auto; -webkit-overflow-scrolling:touch}
+  canvas{display:block}
+
+  /* Timetabell */
+  table{width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px}
+  th{font-size:9px; color:var(--mut); text-transform:uppercase; letter-spacing:.08em; font-weight:600; padding:8px 6px 4px; text-align:right; border-bottom:1px solid var(--line)}
+  th:first-child{text-align:left; padding-left:14px}
+  td{padding:6px; text-align:right; border-bottom:1px solid rgba(36,50,64,.5); white-space:nowrap}
+  td:first-child{text-align:left; padding-left:14px; color:var(--mut)}
+  tr.newday td{border-top:2px solid var(--line)}
+  .t-warm{color:var(--temp)} .t-cold{color:var(--cold)}
+  .rain{color:var(--rain)} .windc{color:var(--wind)} .uvc{color:var(--uv)}
+  .arrow{display:inline-block; font-size:13px}
+
+  /* Dagliste */
+  .day{display:grid; grid-template-columns:52px 30px 1fr auto; gap:8px; align-items:center; padding:10px 14px; border-bottom:1px solid rgba(36,50,64,.5)}
+  .day:last-child{border-bottom:none}
+  .day .dn{font-family:var(--mono); font-size:12px; color:var(--mut)}
+  .day .dn b{color:var(--txt); display:block; font-weight:600}
+  .day .ds{font-size:20px; text-align:center}
+  .day .dd{font-size:11px; color:var(--mut); font-family:var(--mono); line-height:1.5}
+  .day .dt{font-family:var(--mono); font-size:13px; text-align:right; line-height:1.5}
+  .bar{height:4px; border-radius:2px; background:var(--panel2); margin-top:4px; position:relative; overflow:hidden}
+  .bar i{position:absolute; top:0; bottom:0; border-radius:2px; background:linear-gradient(90deg,var(--cold),var(--temp))}
+
+  /* AQ */
+  .aq{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line)}
+  .aq .cell{background:var(--panel)}
+  .aqi-badge{display:inline-block; font-family:var(--mono); font-weight:600; padding:2px 8px; border-radius:6px; font-size:13px}
+
+  /* Sol */
+  .sun{display:flex; justify-content:space-around; padding:12px 14px 14px; font-family:var(--mono); text-align:center}
+  .sun .k{font-size:10px; color:var(--mut); text-transform:uppercase; letter-spacing:.06em}
+  .sun .v{font-size:16px; font-weight:600; margin-top:2px}
+
+  footer{text-align:center; font-size:11px; color:var(--dim); font-family:var(--mono); padding:6px 0 20px}
+  footer a{color:var(--mut)}
+  #status{padding:30px; text-align:center; color:var(--mut); font-family:var(--mono); font-size:13px}
+  .err{color:var(--warn)}
+  @media (prefers-reduced-motion: no-preference){
+    .panel{animation:fadein .3s ease both}
+    @keyframes fadein{from{opacity:0; transform:translateY(4px)} to{opacity:1; transform:none}}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <div style="flex:1;min-width:0">
+      <div class="loc-name" id="locName">Laster …</div>
+      <div class="loc-sub" id="locSub"></div>
+    </div>
+    <button class="ibtn" id="btnGps" title="Bruk GPS">📍</button>
+    <button class="ibtn" id="btnSearch" title="Søk sted">🔍</button>
+    <button class="ibtn" id="btnRefresh" title="Oppdater">↻</button>
+  </div>
+  <div id="searchbox">
+    <input id="q" type="search" placeholder="Søk sted (f.eks. Skien)" autocomplete="off">
+  </div>
+  <div id="results"></div>
+</header>
+
+<main>
+  <div id="status">Henter værdata …</div>
+  <div id="app" style="display:none">
+
+    <section class="panel">
+      <div class="ph"><h2>Nå</h2><div class="meta" id="updated"></div></div>
+      <div class="now">
+        <div class="now-top">
+          <div class="now-temp" id="nTemp">–</div>
+          <div class="now-desc">
+            <div class="sym" id="nSym"></div>
+            <div class="txt" id="nTxt"></div>
+            <div class="feels" id="nFeels"></div>
+          </div>
+        </div>
+      </div>
+      <div class="grid" id="nowGrid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>Meteogram · 48 t</h2><div class="meta">temp / nedbør / vind</div></div>
+      <div class="scroller"><canvas id="meteo"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>Time for time · 24 t</h2><div class="meta">→ rull for mer</div></div>
+      <div class="scroller" style="margin-top:6px">
+        <table id="hourTable"></table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>10-dagers</h2><div class="meta">min–maks / nedbør / vind / UV</div></div>
+      <div id="dayList" style="margin-top:6px"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>Luftkvalitet</h2><div class="meta" id="aqiTxt"></div></div>
+      <div class="aq" id="aqGrid" style="margin-top:10px"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><h2>Sol</h2></div>
+      <div class="sun" id="sunRow"></div>
+    </section>
+
+    <footer>Data: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> · oppdateres hvert 15. min</footer>
+  </div>
+</main>
+
+<script>
+"use strict";
+// ---------- Konfig ----------
+const DEFAULT_LOC = { name:"Skien", admin:"Telemark", lat:59.209, lon:9.609 };
+let loc = { ...DEFAULT_LOC };
+let refreshTimer = null;
+
+// WMO-koder → norsk + symbol
+const WMO = {
+  0:["Klarvær","☀️"],1:["Stort sett klart","🌤️"],2:["Delvis skyet","⛅"],3:["Overskyet","☁️"],
+  45:["Tåke","🌫️"],48:["Rimtåke","🌫️"],
+  51:["Lett yr","🌦️"],53:["Yr","🌦️"],55:["Kraftig yr","🌧️"],
+  56:["Lett underkjølt yr","🌧️❄"],57:["Underkjølt yr","🌧️❄"],
+  61:["Lett regn","🌧️"],63:["Regn","🌧️"],65:["Kraftig regn","🌧️"],
+  66:["Underkjølt regn","🌧️❄"],67:["Kraftig underkjølt regn","🌧️❄"],
+  71:["Lett snø","🌨️"],73:["Snø","🌨️"],75:["Kraftig snø","❄️"],77:["Snøkorn","❄️"],
+  80:["Lette regnbyger","🌦️"],81:["Regnbyger","🌧️"],82:["Kraftige regnbyger","⛈️"],
+  85:["Lette snøbyger","🌨️"],86:["Kraftige snøbyger","❄️"],
+  95:["Tordenvær","⛈️"],96:["Torden m/ lett hagl","⛈️"],99:["Torden m/ hagl","⛈️"]
+};
+const wmo = c => WMO[c] || ["Ukjent","·"];
+const DAGER = ["søn","man","tir","ons","tor","fre","lør"];
+const fmt1 = n => n==null ? "–" : (Math.round(n*10)/10).toLocaleString("nb-NO");
+const fmt0 = n => n==null ? "–" : Math.round(n).toString();
+const hhmm = iso => iso ? iso.slice(11,16) : "–";
+const km = m => m==null ? "–" : (m>=10000 ? Math.round(m/1000) : Math.round(m/100)/10);
+const dirTxt = d => ["N","NNØ","NØ","ØNØ","Ø","ØSØ","SØ","SSØ","S","SSV","SV","VSV","V","VNV","NV","NNV"][Math.round(d/22.5)%16];
+const arrow = d => `<span class="arrow" style="transform:rotate(${(d+180)%360}deg)">↑</span>`;
+const tempClass = t => t==null ? "" : (t < 0 ? "t-cold" : "t-warm");
+
+// ---------- UI-hjelpere ----------
+const $ = id => document.getElementById(id);
+function setStatus(msg, isErr){
+  const s = $("status");
+  s.style.display = "block";
+  s.textContent = msg;
+  s.className = isErr ? "err" : "";
+}
+
+// ---------- Datahenting ----------
+async function fetchAll(){
+  setStatus("Henter værdata for " + loc.name + " …");
+  $("app").style.display = "none";
+  const base = "https://api.open-meteo.com/v1/forecast"
+    + `?latitude=${loc.lat}&longitude=${loc.lon}`
+    + "&timezone=auto&forecast_days=10"
+    + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,surface_pressure,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover,precipitation,weather_code,uv_index,visibility,is_day"
+    + "&hourly=temperature_2m,apparent_temperature,precipitation,precipitation_probability,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,surface_pressure,relative_humidity_2m,dew_point_2m,weather_code,uv_index,visibility,freezing_level_height"
+    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset,daylight_duration,snowfall_sum"
+    + "&wind_speed_unit=ms";
+  const aqURL = "https://air-quality-api.open-meteo.com/v1/air-quality"
+    + `?latitude=${loc.lat}&longitude=${loc.lon}&timezone=auto`
+    + "&current=european_aqi,pm2_5,pm10,nitrogen_dioxide,ozone,sulphur_dioxide,carbon_monoxide";
+  try{
+    const [w, aq] = await Promise.all([
+      fetch(base).then(r => { if(!r.ok) throw new Error("Vær-API "+r.status); return r.json(); }),
+      fetch(aqURL).then(r => r.ok ? r.json() : null).catch(() => null)
+    ]);
+    render(w, aq);
+    $("status").style.display = "none";
+    $("app").style.display = "block";
+  }catch(e){
+    setStatus("Klarte ikke å hente data: " + e.message + " — sjekk nettilkoblingen og prøv ↻", true);
+  }
+}
+
+// ---------- Rendering ----------
+function render(w, aq){
+  const c = w.current, H = w.hourly, D = w.daily;
+  $("locName").textContent = loc.name;
+  $("locSub").textContent = (loc.admin ? loc.admin + " · " : "") + loc.lat.toFixed(3) + ", " + loc.lon.toFixed(3) + " · " + Math.round(w.elevation) + " moh";
+  $("updated").textContent = "oppdatert " + new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"});
+
+  // Nå
+  const [txt, sym] = wmo(c.weather_code);
+  $("nTemp").innerHTML = fmt1(c.temperature_2m) + "°";
+  $("nTemp").className = "now-temp " + tempClass(c.temperature_2m);
+  $("nSym").textContent = sym;
+  $("nTxt").textContent = txt;
+  $("nFeels").textContent = "føles som " + fmt1(c.apparent_temperature) + "°";
+
+  // Trykktrend: nå vs. 3 t siden
+  const nowIdx = H.time.findIndex(t => t >= c.time);
+  let trend = "";
+  if(nowIdx >= 3){
+    const d3 = c.surface_pressure - H.surface_pressure[nowIdx-3];
+    trend = d3 > 0.8 ? " ↑" : d3 < -0.8 ? " ↓" : " →";
+  }
+
+  const cells = [
+    ["Vind", fmt1(c.wind_speed_10m), "m/s " + dirTxt(c.wind_direction_10m)],
+    ["Vindkast", fmt1(c.wind_gusts_10m), "m/s"],
+    ["Fuktighet", fmt0(c.relative_humidity_2m), "%"],
+    ["Duggpunkt", fmt1(c.dew_point_2m), "°C"],
+    ["Trykk", fmt0(c.pressure_msl) + trend, "hPa"],
+    ["Skydekke", fmt0(c.cloud_cover), "%"],
+    ["Nedbør nå", fmt1(c.precipitation), "mm"],
+    ["UV-indeks", fmt1(c.uv_index), ""],
+    ["Sikt", km(c.visibility), "km"]
+  ];
+  $("nowGrid").innerHTML = cells.map(([k,v,u]) =>
+    `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join("");
+
+  drawMeteogram(H, Math.max(nowIdx,0));
+  renderHours(H, Math.max(nowIdx,0));
+  renderDays(D);
+  renderAQ(aq);
+  renderSun(D);
+}
+
+// Meteogram: temp-kurve + nedbørssøyler + vindpiler, 48 t
+function drawMeteogram(H, start){
+  const hours = 48, pxh = 26, padL = 34, padR = 10, height = 190;
+  const cw = padL + hours*pxh + padR;
+  const cv = $("meteo"), dpr = window.devicePixelRatio || 1;
+  cv.width = cw*dpr; cv.height = height*dpr;
+  cv.style.width = cw+"px"; cv.style.height = height+"px";
+  const g = cv.getContext("2d"); g.scale(dpr,dpr);
+
+  const T = H.temperature_2m.slice(start, start+hours);
+  const P = H.precipitation.slice(start, start+hours);
+  const W = H.wind_speed_10m.slice(start, start+hours);
+  const Wd = H.wind_direction_10m.slice(start, start+hours);
+  const times = H.time.slice(start, start+hours);
+
+  const tMin = Math.floor(Math.min(...T)-1), tMax = Math.ceil(Math.max(...T)+1);
+  const pMax = Math.max(1.5, Math.ceil(Math.max(...P)));
+  const chartTop = 14, chartBot = height-46;
+  const y = t => chartBot - (t-tMin)/(tMax-tMin)*(chartBot-chartTop);
+  const x = i => padL + i*pxh + pxh/2;
+
+  // Rutenett + temp-akse
+  g.font = "9px 'IBM Plex Mono',monospace"; g.textAlign = "right";
+  const step = (tMax-tMin) > 12 ? 5 : 2;
+  for(let t = Math.ceil(tMin/step)*step; t <= tMax; t += step){
+    g.strokeStyle = "rgba(36,50,64,.6)"; g.beginPath();
+    g.moveTo(padL, y(t)); g.lineTo(cw-padR, y(t)); g.stroke();
+    g.fillStyle = "#5A6B7D"; g.fillText(t+"°", padL-5, y(t)+3);
+  }
+  // Døgnskiller + klokkeslett
+  g.textAlign = "center";
+  times.forEach((t,i) => {
+    const hh = t.slice(11,13);
+    if(hh === "00"){
+      g.strokeStyle = "rgba(126,144,163,.35)"; g.beginPath();
+      g.moveTo(padL+i*pxh, chartTop-6); g.lineTo(padL+i*pxh, height-14); g.stroke();
+      g.fillStyle = "#7E90A3";
+      g.fillText(DAGER[new Date(t).getDay()], padL+i*pxh+16, 10);
+    }
+    if(i%3===0){ g.fillStyle="#5A6B7D"; g.fillText(hh, x(i), height-32); }
+  });
+  // Nedbørssøyler
+  P.forEach((p,i) => {
+    if(p <= 0) return;
+    const h = Math.min(1, p/pMax) * (chartBot-chartTop) * 0.55;
+    g.fillStyle = "rgba(88,166,255,.55)";
+    g.fillRect(x(i)-pxh*0.32, chartBot-h, pxh*0.64, h);
+    if(p >= 0.3){ g.fillStyle = "#58A6FF"; g.font = "8px 'IBM Plex Mono',monospace"; g.fillText(fmt1(p), x(i), chartBot-h-3); }
+  });
+  // Temp-kurve
+  g.lineWidth = 2; g.strokeStyle = "#FFB454"; g.beginPath();
+  T.forEach((t,i) => i ? g.lineTo(x(i), y(t)) : g.moveTo(x(i), y(t)));
+  g.stroke();
+  // Frysepunkt-linje hvis relevant
+  if(tMin < 0 && tMax > 0){
+    g.setLineDash([4,4]); g.strokeStyle = "rgba(90,184,255,.7)"; g.beginPath();
+    g.moveTo(padL, y(0)); g.lineTo(cw-padR, y(0)); g.stroke(); g.setLineDash([]);
+  }
+  // Vindpiler + verdi nederst
+  g.font = "8px 'IBM Plex Mono',monospace";
+  W.forEach((v,i) => {
+    if(i%3) return;
+    const cx = x(i), cy = height-20, ang = (Wd[i]+180)*Math.PI/180, L = 5;
+    g.strokeStyle = "#3DDBD9"; g.lineWidth = 1.4; g.beginPath();
+    g.moveTo(cx - Math.sin(ang)*L, cy + Math.cos(ang)*L);
+    g.lineTo(cx + Math.sin(ang)*L, cy - Math.cos(ang)*L);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(cx + Math.sin(ang)*L, cy - Math.cos(ang)*L);
+    g.lineTo(cx + Math.sin(ang-2.6)*3.5, cy - Math.cos(ang-2.6)*3.5);
+    g.moveTo(cx + Math.sin(ang)*L, cy - Math.cos(ang)*L);
+    g.lineTo(cx + Math.sin(ang+2.6)*3.5, cy - Math.cos(ang+2.6)*3.5);
+    g.stroke();
+    g.fillStyle = "#3DDBD9"; g.textAlign = "center"; g.fillText(fmt0(v), cx, height-6);
+  });
+}
+
+function renderHours(H, start){
+  const rows = [];
+  rows.push(`<tr><th>Kl</th><th></th><th>Temp</th><th>Føles</th><th>Nedbør</th><th>%</th><th>Vind</th><th>Kast</th><th></th><th>Sky</th><th>Fukt</th><th>Trykk</th><th>UV</th></tr>`);
+  let prevDay = "";
+  for(let i = start; i < Math.min(start+24, H.time.length); i++){
+    const t = H.time[i], day = t.slice(8,10);
+    const nd = prevDay && day !== prevDay ? " class='newday'" : ""; prevDay = day;
+    const [,sym] = wmo(H.weather_code[i]);
+    const p = H.precipitation[i];
+    rows.push(`<tr${nd}>
+      <td>${t.slice(11,16)}</td>
+      <td>${sym}</td>
+      <td class="${tempClass(H.temperature_2m[i])}">${fmt1(H.temperature_2m[i])}°</td>
+      <td style="color:var(--dim)">${fmt1(H.apparent_temperature[i])}°</td>
+      <td class="rain">${p > 0 ? fmt1(p) : "·"}</td>
+      <td class="rain">${fmt0(H.precipitation_probability[i])}</td>
+      <td class="windc">${fmt1(H.wind_speed_10m[i])}</td>
+      <td class="windc" style="opacity:.7">${fmt0(H.wind_gusts_10m[i])}</td>
+      <td class="windc">${arrow(H.wind_direction_10m[i])}</td>
+      <td>${fmt0(H.cloud_cover[i])}</td>
+      <td>${fmt0(H.relative_humidity_2m[i])}</td>
+      <td>${fmt0(H.surface_pressure[i])}</td>
+      <td class="uvc">${fmt1(H.uv_index[i])}</td>
+    </tr>`);
+  }
+  $("hourTable").innerHTML = rows.join("");
+}
+
+function renderDays(D){
+  const allMin = Math.min(...D.temperature_2m_min), allMax = Math.max(...D.temperature_2m_max);
+  const span = Math.max(1, allMax - allMin);
+  $("dayList").innerHTML = D.time.map((t,i) => {
+    const d = new Date(t), [txt, sym] = wmo(D.weather_code[i]);
+    const lo = D.temperature_2m_min[i], hi = D.temperature_2m_max[i];
+    const left = ((lo-allMin)/span*100).toFixed(1), width = Math.max(3,(hi-lo)/span*100).toFixed(1);
+    const snow = D.snowfall_sum[i] > 0 ? ` · ❄ ${fmt1(D.snowfall_sum[i])} cm` : "";
+    return `<div class="day">
+      <div class="dn"><b>${i===0 ? "I dag" : DAGER[d.getDay()]}</b>${t.slice(8,10)}.${t.slice(5,7)}</div>
+      <div class="ds">${sym}</div>
+      <div>
+        <div class="dd">${txt}</div>
+        <div class="dd rain">💧 ${fmt1(D.precipitation_sum[i])} mm (${fmt0(D.precipitation_probability_max[i])} %)${snow}</div>
+        <div class="dd"><span class="windc">💨 ${fmt1(D.wind_speed_10m_max[i])} (${fmt0(D.wind_gusts_10m_max[i])}) m/s ${dirTxt(D.wind_direction_10m_dominant[i])}</span> · <span class="uvc">UV ${fmt1(D.uv_index_max[i])}</span></div>
+      </div>
+      <div class="dt">
+        <span class="t-cold">${fmt0(lo)}°</span> / <span class="t-warm">${fmt0(hi)}°</span>
+        <div class="bar" style="width:76px"><i style="left:${left}%;width:${width}%"></i></div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderAQ(aq){
+  const grid = $("aqGrid"), lbl = $("aqiTxt");
+  if(!aq || !aq.current){ grid.innerHTML = ""; lbl.textContent = "utilgjengelig"; return; }
+  const a = aq.current, i = a.european_aqi;
+  let cls, name;
+  if(i == null){ cls="var(--dim)"; name="–"; }
+  else if(i <= 20){ cls="var(--ok)"; name="God"; }
+  else if(i <= 40){ cls="#B8D87F"; name="Bra"; }
+  else if(i <= 60){ cls="var(--temp)"; name="Moderat"; }
+  else if(i <= 80){ cls="#FF9E4A"; name="Dårlig"; }
+  else{ cls="var(--warn)"; name="Svært dårlig"; }
+  lbl.innerHTML = `<span class="aqi-badge" style="background:${cls}22;color:${cls}">EAQI ${fmt0(i)} · ${name}</span>`;
+  const cells = [
+    ["PM2.5", fmt1(a.pm2_5), "µg/m³"], ["PM10", fmt1(a.pm10), "µg/m³"],
+    ["NO₂", fmt1(a.nitrogen_dioxide), "µg/m³"], ["O₃", fmt1(a.ozone), "µg/m³"],
+    ["SO₂", fmt1(a.sulphur_dioxide), "µg/m³"], ["CO", fmt0(a.carbon_monoxide), "µg/m³"]
+  ];
+  grid.innerHTML = cells.map(([k,v,u]) =>
+    `<div class="cell"><div class="k">${k}</div><div class="v">${v}</div><div class="u">${u}</div></div>`).join("");
+}
+
+function renderSun(D){
+  const dl = D.daylight_duration[0];
+  const dh = Math.floor(dl/3600), dm = Math.round((dl%3600)/60);
+  const diff = D.daylight_duration.length > 1 ? null : null;
+  $("sunRow").innerHTML = `
+    <div><div class="k">Soloppgang</div><div class="v">🌅 ${hhmm(D.sunrise[0])}</div></div>
+    <div><div class="k">Solnedgang</div><div class="v">🌇 ${hhmm(D.sunset[0])}</div></div>
+    <div><div class="k">Dagslys</div><div class="v">${dh} t ${dm} min</div></div>`;
+}
+
+// ---------- Sted: søk + GPS ----------
+$("btnSearch").onclick = () => {
+  const sb = $("searchbox");
+  sb.classList.toggle("open");
+  if(sb.classList.contains("open")) $("q").focus();
+};
+let debounce;
+$("q").addEventListener("input", e => {
+  clearTimeout(debounce);
+  const v = e.target.value.trim();
+  if(v.length < 2){ $("results").innerHTML = ""; return; }
+  debounce = setTimeout(async () => {
+    try{
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(v)}&count=6&language=no`);
+      const j = await r.json();
+      $("results").innerHTML = (j.results||[]).map((p,i) =>
+        `<div class="res" data-i="${i}">${p.name} <small>· ${p.admin1||""} ${p.country||""} · ${p.latitude.toFixed(2)}, ${p.longitude.toFixed(2)}</small></div>`).join("") || "<div class='res'><small>Ingen treff</small></div>";
+      document.querySelectorAll(".res[data-i]").forEach(el => el.onclick = () => {
+        const p = j.results[+el.dataset.i];
+        loc = { name:p.name, admin:p.admin1||"", lat:p.latitude, lon:p.longitude };
+        $("results").innerHTML = ""; $("q").value = ""; $("searchbox").classList.remove("open");
+        fetchAll();
+      });
+    }catch(_){ /* stille */ }
+  }, 350);
+});
+
+$("btnGps").onclick = () => {
+  if(!navigator.geolocation){ setStatus("GPS ikke tilgjengelig i denne nettleseren", true); return; }
+  setStatus("Henter posisjon …");
+  navigator.geolocation.getCurrentPosition(async pos => {
+    loc = { name:"Min posisjon", admin:"", lat:pos.coords.latitude, lon:pos.coords.longitude };
+    try{
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=&latitude=${loc.lat}&longitude=${loc.lon}`);
+      // Open-Meteo har ikke ekte revers-geokoding; behold koordinatnavnet
+    }catch(_){}
+    fetchAll();
+  }, err => {
+    setStatus("Fikk ikke posisjon (" + err.message + ") — bruker " + DEFAULT_LOC.name, true);
+    setTimeout(fetchAll, 1200);
+  }, { timeout: 8000, maximumAge: 300000 });
+};
+
+$("btnRefresh").onclick = fetchAll;
+
+// ---------- Oppstart ----------
+fetchAll();
+refreshTimer = setInterval(fetchAll, 15*60*1000);
+document.addEventListener("visibilitychange", () => {
+  if(document.visibilityState === "visible") fetchAll();
+});
+</script>
+</body>
+</html>
