@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Vær · Detaljert</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#0E141B; --panel:rgba(21,31,42,.82); --panel-solid:#151F2A; --panel2:rgba(27,39,52,.9); --line:#243240;
@@ -115,10 +115,42 @@
     @keyframes bob{50%{transform:translateY(-4px) rotate(-3deg)}}
     .now-temp{transition:color .6s}
   }
+
+  /* ===== Galakse-tema ===== */
+  .loc-name{color:#FFE81F; font-family:'Orbitron',var(--mono); letter-spacing:.1em; text-transform:uppercase; font-size:14px}
+  .ph h2{font-family:'Orbitron',var(--sans); color:#FFE81F; letter-spacing:.2em; text-shadow:0 0 12px rgba(255,232,31,.3)}
+  .panel{box-shadow:0 0 20px rgba(80,140,255,.08)}
+  .now-temp{text-shadow:0 0 24px rgba(255,180,84,.4)}
+  .ibtn:active{box-shadow:0 0 14px rgba(88,166,255,.5)}
+  #crawl{position:fixed; inset:0; z-index:50; background:#000; display:flex; justify-content:center; overflow:hidden; perspective:340px}
+  #crawl canvas{position:absolute; inset:0}
+  #crawl .txt{
+    position:relative; color:#FFE81F; font-weight:600; text-align:justify; width:80%; max-width:420px;
+    font-size:21px; line-height:1.75; transform-origin:50% 100%;
+    transform:rotateX(58deg) translateY(105vh);
+  }
+  #crawl.play .txt{animation:crawl 30s linear forwards}
+  #crawl .txt h1{font-family:'Orbitron',sans-serif; font-size:26px; letter-spacing:.22em; text-align:center; margin-bottom:26px}
+  #crawl .txt .ep{text-align:center; font-family:var(--mono); letter-spacing:.3em; margin-bottom:18px; font-size:14px}
+  @keyframes crawl{to{transform:rotateX(58deg) translateY(-170vh)}}
+  #crawl .skip{position:absolute; bottom:max(24px, env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    color:#9AA9BC; font-family:var(--mono); font-size:12px; border:1px solid #243240; border-radius:20px;
+    padding:9px 20px; background:rgba(14,20,27,.7); cursor:pointer}
 </style>
 </head>
 <body>
 <canvas id="sky"></canvas>
+<div id="crawl" hidden>
+  <canvas id="crawlStars"></canvas>
+  <div class="txt">
+    <div class="ep">EPISODE VII·III</div>
+    <h1>GALAKSENS VÆRVARSEL</h1>
+    <p>Det hersker uro i atmosfæren. Lavtrykk samler styrke ute i vest, og skyene marsjerer inn over fylket.</p>
+    <p>Men håpet lever. Data fra fjerne satellitter strømmer inn — time for time, dag for dag, ned til minste hektopascal.</p>
+    <p>Måtte oppholdsværet være med deg …</p>
+  </div>
+  <button class="skip" id="crawlSkip">Hopp over ▸</button>
+</div>
 <header>
   <div class="hrow">
     <div style="flex:1;min-width:0">
@@ -232,6 +264,55 @@ const FX = (() => {
   let skyCur = [[14,20,27],[14,20,27]], skyTgt = skyCur.map(c=>[...c]);
   let flash = 0, bolt = null, nextBolt = 0, rayAngle = 0, last = 0, running = false;
   let cloudSprite = null;
+  // Galakse: warp-stjerner og planeter
+  let warp = [], hyper = 0, hyperTgt = 0, planets = [];
+  const newWarp = () => ({ x: rnd(-1,1), y: rnd(-1,1), z: rnd(.15,1), pz: 0 });
+  function initGalaxy(){
+    warp = Array.from({length:110}, newWarp);
+    planets = [
+      { fx:.14, fy:.30, r:22, c1:"#B0674A", c2:"#4A2B22", ring:false, drift:rnd(0,6) },
+      { fx:.86, fy:.55, r:15, c1:"#7FA8C9", c2:"#2A3D52", ring:true,  drift:rnd(0,6) }
+    ];
+  }
+  function drawGalaxy(dt, time){
+    hyper += (hyperTgt - hyper)*Math.min(1, dt*2.5);
+    // Planeter: langsom vertikal duving, synlighet dempes av skydekke
+    const pAlpha = .55 * (1 - scene.cloud*.75) + .1;
+    planets.forEach(p => {
+      const px = p.fx*W, py = p.fy*H + Math.sin(time*.08 + p.drift)*10;
+      g.save(); g.globalAlpha = pAlpha;
+      if(p.ring){
+        g.strokeStyle = "rgba(190,205,225,.5)"; g.lineWidth = 2;
+        g.beginPath(); g.ellipse(px, py, p.r*1.9, p.r*.55, -.35, 0, 7); g.stroke();
+      }
+      const sph = g.createRadialGradient(px-p.r*.4, py-p.r*.4, p.r*.15, px, py, p.r);
+      sph.addColorStop(0, p.c1); sph.addColorStop(1, p.c2);
+      g.fillStyle = sph; g.beginPath(); g.arc(px, py, p.r, 0, 7); g.fill();
+      if(p.ring){ // ringens fremside over kula
+        g.strokeStyle = "rgba(210,222,240,.65)"; g.lineWidth = 2;
+        g.beginPath(); g.ellipse(px, py, p.r*1.9, p.r*.55, -.35, -.5, 2.6); g.stroke();
+      }
+      g.restore();
+    });
+    // Warp-stjernefelt mot betrakteren; strekkes ut i hyperspace
+    const cx = W/2, cy = H/2, speed = .05 + hyper*1.6;
+    warp.forEach(s => {
+      s.pz = s.z; s.z -= speed*dt;
+      if(s.z <= .02) Object.assign(s, newWarp(), {z:1, pz:1});
+      const k = 0.5*Math.min(W,H);
+      const px = cx + s.x/s.z*k, py = cy + s.y/s.z*k;
+      const qx = cx + s.x/s.pz*k, qy = cy + s.y/s.pz*k;
+      const a = Math.min(1, (1-s.z))*(.5 + hyper*.5);
+      if(hyper > .05){
+        g.strokeStyle = `rgba(190,215,255,${a})`; g.lineWidth = Math.min(2.5, .4/s.z);
+        g.beginPath(); g.moveTo(qx,qy); g.lineTo(px,py); g.stroke();
+      } else {
+        g.fillStyle = `rgba(205,220,240,${a*.8})`;
+        const r = Math.min(1.6, .5/s.z);
+        g.fillRect(px, py, r, r);
+      }
+    });
+  }
 
   function resize(){
     dpr = Math.min(window.devicePixelRatio||1, 2);
@@ -317,6 +398,9 @@ const FX = (() => {
     g.fillStyle = gr; g.fillRect(0,0,W,H);
 
     const S = scene, time = t/1000;
+
+    // Galakse: planeter + warp-stjerner (alltid, bak været)
+    drawGalaxy(dt, time);
 
     // Stjerner
     stars.forEach(s => {
@@ -439,13 +523,16 @@ const FX = (() => {
   function stop(){ running = false; }
   document.addEventListener("visibilitychange", () =>
     document.visibilityState === "visible" ? start() : stop());
-  return { setScene };
+  initGalaxy();
+  if(!REDUCED) start();
+  return { setScene, setHyper: v => { hyperTgt = v; } };
 })();
 
 // ================= Datahenting =================
 async function fetchAll(){
   $("btnRefresh").classList.add("spin");
-  setStatus("Henter værdata for " + loc.name + " …");
+  FX.setHyper(1); // hyperspace mens vi henter data
+  setStatus("Hopper til lyshastighet …");
   $("app").style.display = "none";
   const base = "https://api.open-meteo.com/v1/forecast"
     + `?latitude=${loc.lat}&longitude=${loc.lon}`
@@ -469,6 +556,7 @@ async function fetchAll(){
     setStatus("Klarte ikke å hente data: " + e.message + " — sjekk nettilkoblingen og prøv ↻", true);
   }finally{
     $("btnRefresh").classList.remove("spin");
+    FX.setHyper(0);
   }
 }
 
@@ -740,6 +828,25 @@ $("btnGps").onclick = () => {
 $("btnRefresh").onclick = fetchAll;
 
 // ================= Oppstart =================
+// Rulletekst-intro (hopper over ved redusert bevegelse)
+(function(){
+  const cr = $("crawl");
+  if(REDUCED){ cr.remove(); return; }
+  cr.hidden = false; cr.classList.add("play");
+  const cc = $("crawlStars"), x = cc.getContext("2d");
+  cc.width = innerWidth; cc.height = innerHeight;
+  x.fillStyle = "#000"; x.fillRect(0,0,cc.width,cc.height);
+  for(let i=0;i<160;i++){
+    x.fillStyle = `rgba(220,230,245,${rnd(.2,.9)})`;
+    x.fillRect(rnd(0,cc.width), rnd(0,cc.height), rnd(.5,1.6), rnd(.5,1.6));
+  }
+  let gone = false;
+  const done = () => { if(!gone){ gone = true; cr.remove(); } };
+  $("crawlSkip").onclick = done;
+  cr.querySelector(".txt").addEventListener("animationend", done);
+  setTimeout(done, 31000);
+})();
+
 fetchAll();
 setInterval(fetchAll, 15*60*1000);
 document.addEventListener("visibilitychange", () => {
